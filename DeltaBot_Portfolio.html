@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeltaBot Multi-Axis Motion Control — Portfolio</title>
+<style>
+  :root{
+    --accent:#0b5cab;
+    --accent-light:#e8f1fb;
+    --rockwell:#cc0000;
+    --border:#d9d9d9;
+    --muted:#556;
+    --bg:#fafbfc;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.65;color:#222;background:var(--bg);margin:0;padding:0;
+  }
+  .wrapper{max-width:1080px;margin:0 auto;padding:32px 28px 80px;background:#fff;box-shadow:0 1px 14px rgba(0,0,0,.06)}
+  h1{color:var(--accent);border-bottom:3px solid var(--accent);padding-bottom:10px;font-size:2rem;margin-top:0}
+  h2{color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:5px;margin-top:44px;font-size:1.5rem}
+  h3{color:#324a63;margin-top:28px;font-size:1.2rem}
+  h4{color:#445;margin-top:18px;font-size:1.02rem}
+  .subtitle{color:var(--muted);font-size:1.05rem;margin:-4px 0 6px}
+  .meta{color:var(--muted);font-size:.92rem;margin-bottom:18px}
+  .pill{display:inline-block;padding:2px 10px;border-radius:10px;font-size:.78rem;font-weight:600;letter-spacing:.02em;margin-right:6px;vertical-align:middle}
+  .pill-rockwell{background:#fde5e5;color:var(--rockwell);border:1px solid #f3b7b7}
+  .pill-packml{background:#eaf4ea;color:#2a6e2a;border:1px solid #c0d9c0}
+  .pill-delta{background:#eef0f9;color:#3a3f8f;border:1px solid #c9cee5}
+  .callout{background:var(--accent-light);border-left:4px solid var(--accent);padding:14px 18px;margin:16px 0;border-radius:0 6px 6px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.94rem}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#eef3f9;color:var(--accent);font-weight:600}
+  code,pre{font-family:"SF Mono",Menlo,Consolas,monospace}
+  code{background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:.9em}
+  pre{background:#1e1e1e;color:#e6e6e6;padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:.88rem;line-height:1.5}
+  pre code{background:transparent;color:inherit;padding:0}
+  .fig{margin:20px 0 26px;text-align:center}
+  .fig img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:6px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .caption{color:var(--muted);font-size:.88rem;margin-top:6px;font-style:italic}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0}
+  @media (max-width:780px){.grid2{grid-template-columns:1fr}}
+  ul,ol{margin:8px 0 12px 24px;padding:0}
+  li{margin:3px 0}
+  .toc{background:#f5f8fc;border:1px solid var(--border);padding:14px 22px;border-radius:6px;margin:18px 0 30px}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:10px 0}
+  .kv dt{color:var(--muted);font-weight:600}
+  .kv dd{margin:0}
+  footer{color:var(--muted);text-align:center;margin-top:56px;padding-top:20px;border-top:1px solid var(--border);font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<h1>DeltaBot: Multi-Axis Coordinated Motion Control</h1>
+<p class="subtitle">7-Servo Delta Robot with Cartesian/Kinematic Coordinate Systems, Spiral Cam Profiles, and PackML-Structured Unit/Equipment Architecture on a Rockwell ControlLogix 1756-L81E Platform</p>
+<p class="meta">
+  <span class="pill pill-delta">Delta Kinematics</span>
+  <span class="pill pill-rockwell">Studio 5000 / 1756-L81E</span>
+  <span class="pill pill-packml">PackML (simplified)</span>
+</p>
+
+<div class="callout">
+  <strong>Project scope.</strong> This project extends the single-axis simple motion control work into a full multi-axis coordinated platform: a Delta-style parallel robot with three joint axes, a rotary tool axis, and three virtual Cartesian axes tied to a CIP coordinate system. A 10-step procedural sequence drives <code>MCLM</code> coordinated linear moves through the Cartesian workspace, then calls a cam-profile calculator and launches two <code>MATC</code> time-driven cam moves to trace a parametric 8&#960;-revolution spiral in X/Y while Z steps. Each axis also owns its own Equipment Module with a PackML-aware CM00 procedure for jog/stop/error handling.
+</div>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#architecture">System architecture &amp; project tree</a></li>
+    <li><a href="#axes">Axes, drives, and coordinate systems</a></li>
+    <li><a href="#unit">Unit program — UP00 procedure &amp; motion math</a></li>
+    <li><a href="#spiral">Spiral cam profile — UP10 &amp; UP03</a></li>
+    <li><a href="#em">Equipment modules — per-axis CM00 procedures</a></li>
+    <li><a href="#flowchart">10-step flowchart (<code>delta&nbsp;bot.xls</code>)</a></li>
+    <li><a href="#trends">Tuning &amp; trend analysis (weeks 2–3)</a></li>
+    <li><a href="#lessons">Engineering takeaways</a></li>
+  </ol>
+</div>
+
+<h2 id="architecture">1. System Architecture &amp; Project Tree</h2>
+
+<p>The DeltaBot controller is a <strong>1756-L81E ControlLogix</strong> running Studio 5000 Logix Designer. The project was structured using the ISA-88/PackML conventions already proven on the earlier Simple Motion project: a single unit (<code>UN01_ExampleMachine</code>) holds the procedural logic, while each physical axis is wrapped in its own Equipment Module (EM). All motion runs over <strong>EtherNet/IP CIP Motion</strong> with Time Sync, so every servo drive is clocked from the same grand-master on the backplane and coordinated linear moves execute on a common time base.</p>
+
+<div class="fig">
+  <img src="delta_images/project_tree.png" alt="DeltaBot Controller Organizer – project tree">
+  <div class="caption"><strong>Figure 1.</strong> Studio 5000 Controller Organizer showing the DeltaBot project tree: <code>UN01_ExampleMachine</code> with its unit procedures (<code>UP00_Procedure</code>, <code>UP01_PackML</code>, <code>UP02_Transform</code>, <code>UP03_SpiralCalcPts</code>, <code>UP10_SpiralCamCalcPoints</code>) and seven Equipment Modules <code>EM01_Axis_J1</code>…<code>EM07_Axis_Z</code>.</div>
+</div>
+
+<h3>Hardware layout</h3>
+<table>
+  <tr><th>Chassis slot / role</th><th>Catalog</th><th>Notes</th></tr>
+  <tr><td>Controller</td><td>1756-L81E (ControlLogix 5580)</td><td>CIP Motion over Ethernet</td></tr>
+  <tr><td>Ethernet bridge</td><td>1756-EN2TR</td><td>Device-level ring to Kinetix drives</td></tr>
+  <tr><td>R-axis servo drive</td><td>Kinetix 5700 <strong>2198-H015-ERS</strong></td><td>Larger frame for rotary tool axis</td></tr>
+  <tr><td>J1 / J2 / J3 servo drives</td><td>Kinetix 5700 <strong>2198-H008-ERS</strong> ×3</td><td>Three joint axes of the delta</td></tr>
+  <tr><td>Virtual axes</td><td>X, Y, Z</td><td>Used only inside <code>Cart_Coor</code></td></tr>
+</table>
+
+<div class="fig">
+  <img src="delta_images/controller_axes.png" alt="Axis list and servo drive modules">
+  <div class="caption"><strong>Figure 2.</strong> Axis catalog — three physical <code>Axis_0N_Jn_Servo</code> AXIS_CIP_DRIVE tags plus the rotary <code>Axis_04_R_Servo</code>, and three virtual <code>AXIS_VIRTUAL</code> tags <code>Axis_05_X</code> / <code>Axis_06_Y</code> / <code>Axis_07_Z</code> for the coordinate frame.</div>
+</div>
+
+<h2 id="axes">2. Axes, Drives, and Coordinate Systems</h2>
+
+<p>The robot exposes <strong>seven motion axes</strong> and <strong>two coordinate systems</strong>:</p>
+
+<table>
+  <tr><th>Tag</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>Axis_01_J1</code>, <code>Axis_02_J2</code>, <code>Axis_03_J3</code></td><td>CIP_DRIVE</td><td>Three delta upper arms (parallelogram joints)</td></tr>
+  <tr><td><code>Axis_04_R</code></td><td>CIP_DRIVE</td><td>Tool/end-effector rotation</td></tr>
+  <tr><td><code>Axis_05_X</code>, <code>Axis_06_Y</code>, <code>Axis_07_Z</code></td><td>VIRTUAL</td><td>Cartesian axes — members of <code>Cart_Coor</code></td></tr>
+  <tr><td><code>Cart_Coor</code></td><td>COORDINATE_SYSTEM</td><td>Cartesian target frame used by all <code>MCLM</code> moves</td></tr>
+  <tr><td><code>Delta_Coor</code></td><td>COORDINATE_SYSTEM</td><td>Joint/mechanism frame — where <code>J1/J2/J3</code> live</td></tr>
+</table>
+
+<p>The coupling between the two coordinate systems is provided by <code>UP02_Transform</code> (delta forward/inverse kinematics). <code>MCLM</code> operates in the Cartesian frame so the programmer specifies moves in <em>tool-tip</em> space; the transform routine resolves the required joint angles in real time. The three virtual Cartesian members are read back through <code>Cart_Coor.ActualPosition[5..7]</code> (X, Y, Z respectively — indexed in the coordinate system's member order).</p>
+
+<h2 id="unit">3. Unit Program — <code>UP00_Procedure</code> &amp; Motion Math</h2>
+
+<p><code>UP00_Procedure</code> is the master choreography of the robot: a 14-rung ladder that sequences ten steps using a set-reset state pattern. Step transitions key off either the <code>.PC</code> (process-complete) bit of the preceding <code>MCLM</code>, the <code>.DN</code> of a wait timer, or the <code>.DN</code>s of the two <code>MCCP</code> cam-profile calculations. The <strong>same motion-math block</strong> is repeated at every linear-move step — once per step, live at every scan — so the accel/decel are <em>recomputed from the current robot position</em> rather than assumed.</p>
+
+<h3>Move-math pattern (identical at each MCLM step)</h3>
+<pre><code>distance[0] := ABS(Cart_Coor.ActualPosition[5] - moveN[0]);   // X error
+distance[1] := ABS(Cart_Coor.ActualPosition[6] - moveN[1]);   // Y error
+distance[2] := ABS(Cart_Coor.ActualPosition[7] - moveN[2]);   // Z error
+
+accel       := (MoveSpeed ** 2)
+             / (0.5 * (distance[0] + distance[1] + distance[2]) / 3);</code></pre>
+
+<p>The <code>accel</code> expression is a first-principles way of sizing the ramp: it picks the acceleration that <em>exactly</em> reaches <code>MoveSpeed</code> over half of the mean per-axis distance, so a short step uses a gentle ramp and a long step uses a stiff one. All moves then execute with:</p>
+
+<dl class="kv">
+  <dt>Coordinate System</dt><dd><code>Cart_Coor</code></dd>
+  <dt>Speed</dt><dd><code>MoveSpeed</code> = 20.0 units/sec</dd>
+  <dt>Accel / Decel</dt><dd><code>accel</code> (computed) — typically ≈ 6.0 units/sec²</dd>
+  <dt>Profile</dt><dd>Trapezoidal</dd>
+  <dt>Accel / Decel Jerk</dt><dd>100 % of Time (later tuned down to 50 % and 10 % — see §7)</dd>
+  <dt>Termination Type</dt><dd>1 (Actual Tolerance — next step blocks on <code>.PC</code>)</dd>
+  <dt>Merge</dt><dd>Disabled</dd>
+</dl>
+
+<div class="fig">
+  <img src="delta_images/up00_step1_mclm.png" alt="UP00 Step 1 — MCLM1 coordinated move">
+  <div class="caption"><strong>Figure 3.</strong> <code>UP00_Procedure</code> rung for Step 1 — three <code>CPT</code> blocks compute per-axis distances, a fourth <code>CPT</code> produces <code>accel</code>, and the <code>MCLM</code> executes the move to <code>move1[0..2] = (50, 50, -130)</code> in <code>Cart_Coor</code>.</div>
+</div>
+
+<div class="fig">
+  <img src="delta_images/up00_step3_mclm.png" alt="UP00 Step 3 — MCLM3 coordinated move to (0,0,-10)">
+  <div class="caption"><strong>Figure 4.</strong> Step 3 — same pattern; target <code>move3 = (0, 0, -10)</code>. The PackML-style <code>UP_Exec_Step_03 ⇒ UP_Exec_Step_04</code> chain (<em>U</em>nlatch + <em>L</em>atch) is visible at the bottom of the rung.</div>
+</div>
+
+<div class="fig">
+  <img src="delta_images/up00_step10_mclm.png" alt="UP00 Step 10 — final MCLM with UP_Idle latch">
+  <div class="caption"><strong>Figure 5.</strong> Step 10 — the closing <code>MCLM</code> (target <code>move10</code>). On <code>.PC</code> it unlatches both <code>UP_Exec_Step_11</code> and <code>UP_Execute</code> and latches <code>UP_Idle</code>, handing the PackML state machine back to <em>Idle</em>.</div>
+</div>
+
+<h3>Step targets summary</h3>
+<table>
+  <tr><th>Step</th><th>Action</th><th>X</th><th>Y</th><th>Z</th><th>Terminator</th></tr>
+  <tr><td>1</td><td><code>MCLM1</code></td><td>50</td><td>50</td><td>−130</td><td><code>mclm1.PC</code></td></tr>
+  <tr><td>2</td><td>Wait 1&nbsp;s</td><td colspan="3">—</td><td><code>waittmr.DN</code></td></tr>
+  <tr><td>3</td><td><code>MCLM3</code></td><td>0</td><td>0</td><td>−10</td><td><code>mclm3.PC</code></td></tr>
+  <tr><td>4</td><td><code>MCLM4</code></td><td>0</td><td>0</td><td>70</td><td><code>mclm4.PC</code></td></tr>
+  <tr><td>5</td><td><code>MCLM5</code></td><td>−50</td><td>−50</td><td>0</td><td><code>mclm5.PC</code></td></tr>
+  <tr><td>6</td><td><code>MCLM6</code></td><td>0</td><td>0</td><td>−70</td><td><code>mclm6.PC</code></td></tr>
+  <tr><td>7</td><td>JSR <code>UP10_SpiralCamCalcPoints</code>, <code>UP03_SpiralCalcPts</code> (spiral cam build &amp; launch)</td><td colspan="3">—</td><td><code>MCCP_1.DN&nbsp;&amp;&nbsp;MCCP_2.DN</code></td></tr>
+  <tr><td>8</td><td>Extra step — spiral executing on X &amp; Y (time-driven <code>MATC</code>), used as a timing dwell</td><td colspan="3">—</td><td>step_08 array bits (one per axis)</td></tr>
+  <tr><td>9</td><td><code>MCLM9</code></td><td>0</td><td>0</td><td>40</td><td><code>mclm9.PC</code></td></tr>
+  <tr><td>10</td><td><code>MCLM10</code> → latch <code>UP_Idle</code></td><td colspan="3">(return home)</td><td><code>mclm10.PC</code></td></tr>
+</table>
+
+<h2 id="spiral">4. Spiral Cam Profile — <code>UP10_SpiralCamCalcPoints</code> &amp; <code>UP03_SpiralCalcPts</code></h2>
+
+<p>Steps 7–8 draw a parametric 2-revolution spiral in the X/Y plane. Rather than stream a coordinated path, the program builds two <strong>cam profiles</strong> (one for X, one for Y) as a function of a common time-base master, then runs <code>MATC</code> on each virtual axis to play the cam back in time-driven mode. This is a classic trick when the workspace path is periodic or analytic: the PLC computes the geometry <em>once</em> and the motion planner interpolates the rest.</p>
+
+<h3>UP10 — build the cam points (Structured Text)</h3>
+
+<div class="fig">
+  <img src="delta_images/up10_spiralcam_st.png" alt="UP10 structured text – spiral point generator">
+  <div class="caption"><strong>Figure 6.</strong> <code>UP10_SpiralCamCalcPoints</code> — 14-line structured-text routine that fills the <code>Spiral_X_Cam</code> and <code>Spiral_Y_Cam</code> CAM arrays with 101 points over 8&#960; radians (two full spiral turns). Radius <code>R = 2.0</code> grows linearly with θ, giving the classic Archimedean spiral <code>r = Rθ</code>.</div>
+</div>
+
+<pre><code>NumOfPoints := 101;
+R           := 2.0;
+
+FOR Index := 0 TO NumOfPoints-1 DO
+    Theta := Index * (8 * pi) / NumOfPoints;
+
+    Spiral_X_Cam[Index].Master      := Index;
+    Spiral_X_Cam[Index].Slave       := R * Theta * COS(Theta);
+    Spiral_X_Cam[Index].SegmentType := 0;                 // linear
+
+    Spiral_Y_Cam[Index].Master      := Index;
+    Spiral_Y_Cam[Index].Slave       := R * Theta * SIN(Theta);
+    Spiral_Y_Cam[Index].SegmentType := 0;
+END_FOR;</code></pre>
+
+<h3>UP03 — convert the point arrays into executable cam profiles</h3>
+
+<div class="fig">
+  <img src="delta_images/up03_spiralcalcpts.png" alt="UP03 – two MCCP blocks">
+  <div class="caption"><strong>Figure 7.</strong> <code>UP03_SpiralCalcPts</code> — two parallel <code>MCCP</code> (Motion Calculate Cam Profile) blocks. Each takes the 101-point CAM array from UP10 and produces a CAM_PROFILE (<code>Spiral_XCam_Pro</code>, <code>Spiral_YCam_Pro</code>) that the motion planner can interpolate. The rung latches <code>UP_Exec_StepDn_07</code> once both <code>.DN</code> bits are high.</div>
+</div>
+
+<h3>Playback — per-axis <code>MATC</code> in the EM</h3>
+
+<p>Once the profiles exist, each Cartesian virtual axis calls <code>MATC</code> (Motion Axis Time Cam) to play its half of the spiral. The settings are identical for X and Y:</p>
+
+<div class="fig">
+  <img src="delta_images/em05_x_cm00_matc.png" alt="EM05_Axis_X CM00 MATC time-driven cam">
+  <div class="caption"><strong>Figure 8.</strong> <code>EM05_Axis_X / CM00_Procedure</code>, rung 5 — <code>MATC</code> binds <code>Axis_05_X</code> to <code>Spiral_XCam_Pro</code>. <em>Distance Scaling = 1.0</em> (full-size spiral), <em>Time Scaling = 0.15</em> (plays the cam in 15 % of master time — effectively ≈ 7× faster than 1&nbsp;s/point), <em>Execution Mode = Once</em>, <em>Schedule = Immediate</em>, <em>Instruction Mode = Time&nbsp;Driven Mode</em>.</div>
+</div>
+
+<p>Because <code>MATC</code> is time-driven, the spiral traces itself autonomously on each axis — the virtual X and Y axes share nothing but the common time base, yet produce a smooth 2D path because both cams were built from the same <code>Theta</code> sweep. Meanwhile <code>Axis_04_R</code> runs a short <em>jog</em> sequence in its own EM so the tool spins while the spiral draws.</p>
+
+<h2 id="em">5. Equipment Modules — Per-Axis <code>CM00_Procedure</code></h2>
+
+<p>Each axis EM owns an identical CM00 pattern — 8 or 9 rungs of PackML-aware logic that map the unit step flags into motion instructions on that axis:</p>
+
+<ul>
+  <li><strong>Rung 0:</strong> placeholder <code>NOP</code> (header).</li>
+  <li><strong>Rung 1:</strong> on <code>s:fs</code> (first scan), <code>COP</code> the default <code>MI_Init</code> struct into the working motion-instruction tag.</li>
+  <li><strong>Rung 2:</strong> on first scan, <code>UP_Resetting</code> or <code>UP_Idle</code>, unlatch every step bit.</li>
+  <li><strong>Rung 3:</strong> if no step is active, latch <code>No_Steps_Active</code>.</li>
+  <li><strong>Rung 4:</strong> if <code>UP_Execute</code> and <code>No_Steps_Active</code>, seed <code>Step_1</code>.</li>
+  <li><strong>Rungs 5–7:</strong> the axis's actual motion instructions (the differ per EM — see below).</li>
+  <li><strong>Last rung:</strong> <code>AFI</code>-guarded error latch to <code>EM_ProcedureError[EM_Number]</code>.</li>
+</ul>
+
+<h3>EM03_Axis_R — jog during the spiral (MAJ + MAS)</h3>
+
+<div class="fig">
+  <img src="delta_images/em03_r_cm00_maj.png" alt="EM03_Axis_R CM00 – MAJ jog on Step 8">
+  <div class="caption"><strong>Figure 9.</strong> <code>EM03_Axis_R / CM00_Procedure</code>, rung 5 — an <code>MAJ</code> (Motion Axis Jog) starts the tool spinning at <em>0.1 units/sec</em> with parameterized <em>Par_Jog_Accel / Par_Jog_Decel = 100.0 units/sec²</em>, <em>S-Curve</em> profile, <em>Jerk = 100 % of Time</em>, during <code>UP_Exec_Step_08</code> (while the spiral is playing on X &amp; Y).</div>
+</div>
+
+<div class="fig">
+  <img src="delta_images/em03_r_cm00_jog_mas.png" alt="EM03_Axis_R CM00 – MAS stop jog on Step 9">
+  <div class="caption"><strong>Figure 10.</strong> Rung 6 of the same routine — an <code>MAS</code> (Motion Axis Stop) kills the jog at <code>UP_Exec_Step_09</code>, changing decel but preserving the decel-jerk, so the tool stops smoothly before the final return move.</div>
+</div>
+
+<h3>EM05_Axis_X / EM06_Axis_Y — spiral playback via MATC</h3>
+
+<div class="fig">
+  <img src="delta_images/em06_y_cm00_matc.png" alt="EM06_Axis_Y CM00 – MATC time-driven cam">
+  <div class="caption"><strong>Figure 11.</strong> <code>EM06_Axis_Y / CM00_Procedure</code> — identical to EM05 but bound to <code>Axis_06_Y</code> and <code>Spiral_YCam_Pro</code>. The two EMs fire in parallel at <code>UP_Exec_Step_08</code>.</div>
+</div>
+
+<h2 id="flowchart">6. The 10-Step Flowchart (<code>delta bot.xls</code>)</h2>
+
+<p>The spreadsheet captures the high-level choreography that the UP00 rungs implement:</p>
+
+<table>
+  <tr><th>Step</th><th>Action</th><th>Transition</th></tr>
+  <tr><td>1</td><td>calculate move (MCLM1)</td><td>move complete</td></tr>
+  <tr><td>2</td><td>wait</td><td>waittmr.DN = 1&nbsp;s</td></tr>
+  <tr><td>3</td><td>calculate move (MCLM3)</td><td>move complete</td></tr>
+  <tr><td>4</td><td>calculate move (MCLM4)</td><td>move complete</td></tr>
+  <tr><td>5</td><td>calculate move (MCLM5)</td><td>move complete</td></tr>
+  <tr><td>6</td><td>calculate move (MCLM6)</td><td>move complete</td></tr>
+  <tr><td>7</td><td>calculate cam (MCCP1 &amp; MCCP2)</td><td>MCCP_1.DN &amp; MCCP_2.DN</td></tr>
+  <tr><td>8</td><td>EXTRA — spiral plays, R-axis jogs</td><td>all axis step-done bits</td></tr>
+  <tr><td>9</td><td>calculate move (MCLM9)</td><td>move complete</td></tr>
+  <tr><td>10</td><td>calculate move (MCLM10) → Idle</td><td>move complete</td></tr>
+</table>
+
+<h2 id="trends">7. Tuning &amp; Trend Analysis (Weeks 2 – 3)</h2>
+
+<p>Three trend experiments were run to visualise how <strong>accel/decel jerk</strong> shapes the Cartesian path during the 6-step linear sequence (before the spiral). <code>Cart_Coor.ActualPosition[0..2]</code> (X/Y/Z — at coordinate-system indices 0/1/2) are plotted against time on the same chart; a companion chart plots X vs. Z to show the projected path.</p>
+
+<h3>Jerk = 100 % of time (trapezoidal — fastest cycle)</h3>
+
+<div class="grid2">
+  <div class="fig">
+    <img src="delta_images/trend_jerk100_pos.png" alt="Jerk 100% trend plot">
+    <div class="caption"><strong>Figure 12.</strong> X/Y/Z position vs time with jerk = 100 %. Total cycle ≈ 45&nbsp;s. The ramps are sharp-elbowed — jerk is effectively infinite at the transition, which is mechanically the harshest but temporally the fastest.</div>
+  </div>
+  <div class="fig">
+    <img src="delta_images/trend_jerk100_xz.png" alt="Jerk 100% X vs Z">
+    <div class="caption"><strong>Figure 13.</strong> X vs Z projection, jerk 100 %. The motion is dominated by straight legs (pure trapezoidal), giving a crisp polygonal path.</div>
+  </div>
+</div>
+
+<h3>Jerk = 50 % of time (half-S, half-trap)</h3>
+
+<div class="grid2">
+  <div class="fig">
+    <img src="delta_images/trend_jerk50_pos.png" alt="Jerk 50% trend plot">
+    <div class="caption"><strong>Figure 14.</strong> Jerk = 50 %. The shoulders of each ramp now round slightly; cycle lengthens a few seconds but peak jerk is halved.</div>
+  </div>
+  <div class="fig">
+    <img src="delta_images/trend_jerk50_xz.png" alt="Jerk 50% X vs Z">
+    <div class="caption"><strong>Figure 15.</strong> X vs Z, jerk 50 %. Corners of the polygonal path stay tight because termination type is still <em>actual tolerance</em> — the motion planner fully completes each step before the next launches.</div>
+  </div>
+</div>
+
+<h3>Jerk = 10 % of time (full S-curve)</h3>
+
+<div class="grid2">
+  <div class="fig">
+    <img src="delta_images/trend_jerk10_pos.png" alt="Jerk 10% trend plot">
+    <div class="caption"><strong>Figure 16.</strong> Jerk = 10 %. Ramps are now deeply rounded (essentially an S-curve), cycle time grows noticeably, but mechanical stress on the delta parallelograms drops dramatically.</div>
+  </div>
+  <div class="fig">
+    <img src="delta_images/trend_jerk10_xz.png" alt="Jerk 10% X vs Z">
+    <div class="caption"><strong>Figure 17.</strong> X vs Z at jerk 10 %. The projected path is still linear segment-by-segment because each step terminates individually, but intra-segment it is gentler.</div>
+  </div>
+</div>
+
+<h3>Week-3 run — with the spiral cam playing</h3>
+
+<div class="grid2">
+  <div class="fig">
+    <img src="delta_images/trend_week3_pos.png" alt="Week-3 trend including spiral cam">
+    <div class="caption"><strong>Figure 18.</strong> Full week-3 run: linear steps 1–6, then the spiral's time-driven <code>MATC</code> on X/Y (the two ramped-sinusoid humps on the X and Y channels around the midpoint), then linear steps 9–10 to return home.</div>
+  </div>
+  <div class="fig">
+    <img src="delta_images/trend_week3_xy.png" alt="Week-3 X vs Y spiral (projection of linear segments)">
+    <div class="caption"><strong>Figure 19.</strong> X vs Y during the linear portion (the trend chart clipped out the spiral curvature at this zoom). The diagonal trace corresponds to the (50, 50) → (−50, −50) diagonal traversed across steps 1, 3, 4, 5, 6.</div>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Tuning takeaway.</strong> Jerk percentage trades cycle time for mechanical friendliness on an almost linear basis for this workload — 10 % jerk is ~1.5× the total time of 100 % jerk but is what you would run in production on a delta robot, because the parallel kinematics amplifies shock at the tool through all three J-axes simultaneously.
+</div>
+
+<h2 id="lessons">8. Engineering Takeaways</h2>
+
+<ul>
+  <li><strong>Coordinate systems over per-axis moves.</strong> Programming moves in <code>Cart_Coor</code> (with <code>UP02_Transform</code> doing the delta inverse kinematics under the hood) meant the unit procedure contains pure Cartesian geometry — easier to review, simulate, and tune than seven independently choreographed joint motions.</li>
+  <li><strong>Cam profiles for analytic paths.</strong> The 2-revolution spiral could have been streamed point-by-point, but building it once (<code>UP10</code>) → converting it to a CAM_PROFILE (<code>UP03</code>) → playing it back with <code>MATC</code> at <em>Time&nbsp;Scaling = 0.15</em> is vastly smoother and cheaper per scan.</li>
+  <li><strong>Live-computed accel.</strong> Computing <code>accel = MoveSpeed² / (½·mean-distance)</code> at every step makes the procedure position-robust: homing offsets or operator jogs don't break the ramp.</li>
+  <li><strong>PackML in every module.</strong> The <code>UP_Idle</code> / <code>UP_Execute</code> / <code>UP_Resetting</code> flags appear in every EM's CM00, so each axis independently agrees with the unit on when to start, stop, or clear steps. This is what lets the R-axis jog and the X/Y cams fire in parallel without cross-contamination.</li>
+  <li><strong>Jerk is the production knob.</strong> The three trend sets (100 %, 50 %, 10 %) show jerk is the first-order lever for mechanical stress on a delta — more useful to vary than speed itself.</li>
+</ul>
+
+<footer>
+  <p>DeltaBot motion-control portfolio &#183; Rockwell Studio 5000 / 1756-L81E &#183; EtherNet/IP CIP Motion &#183; Compiled from <code>Report.pdf</code>, <code>trends&nbsp;week&nbsp;2&amp;3.pdf</code>, and <code>delta&nbsp;bot.xls</code>.</p>
+</footer>
+
+</div>
+</body>
+</html>
