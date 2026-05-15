@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeltaBot — Multi-Axis Coordinated Motion Control | 1756-L81E</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c11;
+    --panel: #14171d;
+    --panel-2: #1c2027;
+    --line: #2a2f38;
+    --ink: #e8eaf0;
+    --ink-dim: #8a8e98;
+    --ink-low: #555964;
+    --delta: #9b6cff;            /* Kinematic violet */
+    --delta-glow: rgba(155, 108, 255, 0.20);
+    --rockwell: #cc0000;
+    --rockwell-glow: rgba(204, 0, 0, 0.15);
+    --cip: #00d4aa;              /* CIP Motion teal */
+    --cip-glow: rgba(0, 212, 170, 0.15);
+    --x-axis: #ff6b6b;
+    --y-axis: #4ecdc4;
+    --z-axis: #ffd93d;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --serif: 'Fraunces', Georgia, serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.65;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(circle at 20% 8%, rgba(155,108,255,0.06), transparent 42%),
+      radial-gradient(circle at 80% 75%, rgba(0,212,170,0.04), transparent 42%);
+    background-attachment: fixed;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+    background-size: 36px 36px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .statusbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,12,17,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+  }
+  .statusbar .left, .statusbar .right { display: flex; gap: 24px; align-items: center; }
+  .led {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--delta);
+    box-shadow: 0 0 10px var(--delta-glow);
+    animation: pulse 2s infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero {
+    padding: 80px 0 60px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 60px;
+    align-items: start;
+  }
+  .hero-tag {
+    color: var(--delta);
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .hero-tag::before {
+    content: '';
+    display: inline-block;
+    width: 32px;
+    height: 2px;
+    background: var(--delta);
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(40px, 5.5vw, 76px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+    color: var(--ink);
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--delta);
+    font-weight: 300;
+  }
+  .hero-sub {
+    color: var(--ink-dim);
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 640px;
+    margin-bottom: 40px;
+  }
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .meta-cell {
+    flex: 1;
+    min-width: 130px;
+    padding: 16px 20px;
+    border-right: 1px solid var(--line);
+  }
+  .meta-cell:last-child { border-right: none; }
+  .meta-label {
+    font-size: 10px;
+    color: var(--ink-low);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+  }
+  .meta-value {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .delta-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 24px;
+    position: relative;
+  }
+  .delta-card::before {
+    content: 'KINEMATICS';
+    position: absolute;
+    top: -1px;
+    right: 20px;
+    background: var(--bg);
+    color: var(--delta);
+    padding: 2px 10px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+  }
+  .delta-card-title {
+    font-size: 10px;
+    color: var(--ink-low);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .delta-card svg { width: 100%; height: auto; display: block; }
+
+  section {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .section-header {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 40px;
+    margin-bottom: 48px;
+    align-items: baseline;
+  }
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--delta);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .section-num span { color: var(--ink-low); margin-right: 12px; }
+  .section-title {
+    font-family: var(--serif);
+    font-size: clamp(28px, 3.5vw, 44px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .section-title em { font-style: italic; color: var(--delta); }
+
+  .prose {
+    max-width: 820px;
+    color: var(--ink);
+    font-size: 14.5px;
+    line-height: 1.75;
+  }
+  .prose p + p { margin-top: 1.2em; }
+  .prose strong {
+    color: var(--ink);
+    font-weight: 600;
+    background: var(--delta-glow);
+    padding: 1px 4px;
+  }
+  .prose code {
+    color: var(--delta);
+    background: rgba(155,108,255,0.08);
+    padding: 1px 6px;
+    font-size: 12.5px;
+  }
+
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 32px;
+  }
+  .arch-card {
+    background: var(--panel);
+    padding: 28px;
+  }
+  .arch-card.span-6 { grid-column: span 6; }
+  .arch-card.span-4 { grid-column: span 4; }
+  .arch-card.span-8 { grid-column: span 8; }
+  .arch-card.span-12 { grid-column: span 12; }
+  .arch-card-label {
+    font-size: 10px;
+    color: var(--delta);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .arch-card-title {
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--ink);
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+  .arch-card p {
+    color: var(--ink-dim);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .arch-card code {
+    color: var(--delta);
+    background: rgba(155,108,255,0.08);
+    padding: 1px 5px;
+    font-size: 11.5px;
+  }
+
+  /* Hardware / axis table */
+  .axis-table {
+    border: 1px solid var(--line);
+    margin-top: 24px;
+  }
+  .axis-row {
+    display: grid;
+    grid-template-columns: 280px 160px 1fr;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.2s;
+  }
+  .axis-row:last-child { border-bottom: none; }
+  .axis-row:hover { background: var(--panel-2); }
+  .axis-row.header { background: var(--panel-2); font-size: 10px; color: var(--ink-low); letter-spacing: 0.2em; text-transform: uppercase; }
+  .axis-cell {
+    padding: 14px 20px;
+    font-size: 13px;
+    border-right: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+  }
+  .axis-cell:last-child { border-right: none; }
+  .axis-tag { color: var(--delta); font-weight: 600; font-size: 12.5px; }
+  .axis-type {
+    color: var(--ink-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .axis-desc { color: var(--ink); font-size: 12.5px; }
+  .axis-cell code {
+    color: var(--cip);
+    background: rgba(0,212,170,0.08);
+    padding: 1px 5px;
+    font-size: 11.5px;
+  }
+
+  /* Step targets table */
+  .step-table {
+    border: 1px solid var(--line);
+    margin-top: 24px;
+    overflow-x: auto;
+  }
+  .step-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 70px 70px 70px 200px;
+    border-bottom: 1px solid var(--line);
+    transition: background 0.2s;
+    min-width: 720px;
+  }
+  .step-row:last-child { border-bottom: none; }
+  .step-row:hover { background: var(--panel-2); }
+  .step-row.header { background: var(--panel-2); font-size: 10px; color: var(--ink-low); letter-spacing: 0.2em; text-transform: uppercase; }
+  .step-row.spiral { background: rgba(155,108,255,0.04); }
+  .step-cell {
+    padding: 12px 16px;
+    font-size: 12.5px;
+    border-right: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+  }
+  .step-cell:last-child { border-right: none; }
+  .step-n { color: var(--delta); font-weight: 600; }
+  .step-act code { color: var(--cip); background: rgba(0,212,170,0.08); padding: 1px 5px; font-size: 11.5px; }
+  .coord { color: var(--ink); font-family: var(--mono); }
+  .coord.x { color: var(--x-axis); }
+  .coord.y { color: var(--y-axis); }
+  .coord.z { color: var(--z-axis); }
+  .term { color: var(--ink-dim); font-size: 11.5px; }
+  .term code { color: var(--cip); background: rgba(0,212,170,0.08); padding: 1px 4px; font-size: 11px; }
+
+  /* Figure blocks */
+  .figs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    margin-top: 32px;
+  }
+  .figs.single { grid-template-columns: 1fr; max-width: 900px; margin-left: auto; margin-right: auto; }
+  .fig {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 16px;
+    transition: border-color 0.3s;
+  }
+  .fig:hover { border-color: var(--delta); }
+  .fig img {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #fff;
+    border: 1px solid var(--line);
+    margin-bottom: 12px;
+  }
+  .fig-label {
+    font-size: 10px;
+    color: var(--delta);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .fig-caption {
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .fig-caption strong { color: var(--ink); font-weight: 600; }
+  .fig-caption code {
+    color: var(--delta);
+    background: rgba(155,108,255,0.08);
+    padding: 1px 4px;
+    font-size: 11px;
+  }
+
+  /* Code block */
+  .code-block {
+    background: #0d0f14;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--delta);
+    margin-top: 24px;
+    padding: 22px 26px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--ink);
+  }
+  .code-block .kw { color: var(--delta); font-weight: 600; }
+  .code-block .ax { color: var(--cip); }
+  .code-block .num { color: var(--z-axis); }
+  .code-block .com { color: var(--ink-low); font-style: italic; }
+  .code-block .str { color: var(--y-axis); }
+
+  /* KV motion settings */
+  .motion-spec {
+    margin-top: 28px;
+    border: 1px solid var(--line);
+  }
+  .spec-row {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    border-bottom: 1px solid var(--line);
+  }
+  .spec-row:last-child { border-bottom: none; }
+  .spec-row:hover { background: var(--panel-2); }
+  .spec-row .k {
+    padding: 12px 20px;
+    color: var(--ink-low);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-right: 1px solid var(--line);
+  }
+  .spec-row .v {
+    padding: 12px 20px;
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .spec-row .v code {
+    color: var(--delta);
+    background: rgba(155,108,255,0.08);
+    padding: 1px 5px;
+    font-size: 12px;
+  }
+
+  /* Skills grid */
+  .skills-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-top: 32px;
+  }
+  .skill {
+    background: var(--panel);
+    padding: 24px;
+  }
+  .skill-name {
+    font-family: var(--serif);
+    font-size: 18px;
+    color: var(--delta);
+    margin-bottom: 12px;
+    font-style: italic;
+  }
+  .skill ul {
+    list-style: none;
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    line-height: 1.8;
+  }
+  .skill ul li {
+    padding-left: 16px;
+    position: relative;
+  }
+  .skill ul li::before {
+    content: '\2192';
+    position: absolute;
+    left: 0;
+    color: var(--ink-low);
+  }
+
+  .outcome {
+    background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%);
+    border: 1px solid var(--line);
+    padding: 48px;
+    margin-top: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .outcome::before {
+    content: 'TUNED &amp; TRENDED';
+    position: absolute;
+    top: 20px;
+    right: 32px;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--cip);
+    border: 1px solid var(--cip);
+    padding: 4px 12px;
+  }
+  .outcome p {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--ink);
+    max-width: 820px;
+  }
+  .outcome p em { color: var(--delta); font-style: italic; }
+
+  footer {
+    padding: 60px 0 40px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-low);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  footer .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    .section-header { grid-template-columns: 1fr; gap: 16px; }
+    .figs { grid-template-columns: 1fr; }
+    .skills-grid { grid-template-columns: 1fr; }
+    .arch-card.span-6, .arch-card.span-4, .arch-card.span-8 { grid-column: span 12; }
+    .axis-row { grid-template-columns: 1fr; }
+    .axis-cell { border-right: none; border-bottom: 1px solid var(--line); }
+    .axis-row.header { display: none; }
+    .spec-row { grid-template-columns: 1fr; }
+    .spec-row .k { border-right: none; border-bottom: 1px solid var(--line); }
+    .statusbar { padding: 10px 16px; font-size: 10px; }
+    .statusbar .right .hide-mobile { display: none; }
+    .container { padding: 0 16px; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade { animation: fadeUp 0.8s ease-out backwards; }
+  .fade-1 { animation-delay: 0.1s; }
+  .fade-2 { animation-delay: 0.2s; }
+  .fade-3 { animation-delay: 0.3s; }
+
+  /* Subtle spiral animation in the hero SVG */
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="statusbar">
+  <div class="left">
+    <span><span class="led"></span>1756-L81E &middot; CIP MOTION SYNC</span>
+    <span class="hide-mobile">UN01_ExampleMachine &middot; UP_Idle</span>
+  </div>
+  <div class="right">
+    <span class="hide-mobile">EE 5340 &middot; CAPSTONE</span>
+    <span>STUDIO 5000</span>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-tag fade fade-1">ControlLogix 1756-L81E &middot; CIP Motion &middot; PackML</div>
+        <h1 class="fade fade-2">DeltaBot <em>Multi-Axis</em> Motion Control</h1>
+        <p class="hero-sub fade fade-3">
+          A 7-servo Delta parallel robot with Cartesian + kinematic coordinate systems, a 10-step
+          procedural sequence of <code style="background:rgba(155,108,255,0.1);color:var(--delta);padding:1px 5px;">MCLM</code>
+          coordinated linear moves, two parallel <code style="background:rgba(155,108,255,0.1);color:var(--delta);padding:1px 5px;">MATC</code>
+          time-driven cams playing an 8&pi;-radian spiral, and a PackML-aware Equipment Module per axis.
+        </p>
+        <div class="hero-meta">
+          <div class="meta-cell">
+            <div class="meta-label">Axes</div>
+            <div class="meta-value">7 + 2 CS</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">Drives</div>
+            <div class="meta-value">Kinetix 5700</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">Steps</div>
+            <div class="meta-value">10 &middot; UP00</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">Motion</div>
+            <div class="meta-value">CIP &middot; Time Sync</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delta robot kinematic diagram -->
+      <div class="delta-card fade fade-3">
+        <div class="delta-card-title">DELTA + SPIRAL PROJECTION</div>
+        <svg viewBox="0 0 320 380" xmlns="http://www.w3.org/2000/svg">
+          <!-- Upper triangular plate -->
+          <g>
+            <polygon points="60,60 260,60 160,40 60,60" fill="none" stroke="#cc0000" stroke-width="1.4"/>
+            <polygon points="60,60 160,40 260,60 160,80 60,60" fill="#cc0000" opacity="0.08"/>
+            <!-- J1 J2 J3 motor mounts -->
+            <circle cx="60" cy="60" r="6" fill="#1c2027" stroke="#9b6cff" stroke-width="1.5"/>
+            <text x="60" y="63" fill="#9b6cff" font-family="JetBrains Mono" font-size="6" text-anchor="middle">J1</text>
+            <circle cx="260" cy="60" r="6" fill="#1c2027" stroke="#9b6cff" stroke-width="1.5"/>
+            <text x="260" y="63" fill="#9b6cff" font-family="JetBrains Mono" font-size="6" text-anchor="middle">J2</text>
+            <circle cx="160" cy="40" r="6" fill="#1c2027" stroke="#9b6cff" stroke-width="1.5"/>
+            <text x="160" y="43" fill="#9b6cff" font-family="JetBrains Mono" font-size="6" text-anchor="middle">J3</text>
+            <text x="160" y="22" fill="#8a8e98" font-family="JetBrains Mono" font-size="7" text-anchor="middle">FIXED FRAME</text>
+          </g>
+
+          <!-- Upper arms (servo-driven) -->
+          <line x1="60" y1="60" x2="100" y2="170" stroke="#9b6cff" stroke-width="2.2"/>
+          <line x1="260" y1="60" x2="220" y2="170" stroke="#9b6cff" stroke-width="2.2"/>
+          <line x1="160" y1="40" x2="160" y2="160" stroke="#9b6cff" stroke-width="2.2"/>
+
+          <!-- Parallelogram lower arms (each side double line) -->
+          <line x1="100" y1="170" x2="145" y2="240" stroke="#555964" stroke-width="1"/>
+          <line x1="108" y1="172" x2="153" y2="242" stroke="#555964" stroke-width="1"/>
+          <line x1="220" y1="170" x2="175" y2="240" stroke="#555964" stroke-width="1"/>
+          <line x1="212" y1="172" x2="167" y2="242" stroke="#555964" stroke-width="1"/>
+          <line x1="160" y1="160" x2="160" y2="235" stroke="#555964" stroke-width="1"/>
+          <line x1="166" y1="161" x2="166" y2="236" stroke="#555964" stroke-width="1"/>
+
+          <!-- Lower platform / tool plate -->
+          <ellipse cx="160" cy="240" rx="22" ry="6" fill="#1c2027" stroke="#9b6cff" stroke-width="1.5"/>
+          <!-- R-axis tool spinning -->
+          <circle cx="160" cy="240" r="3" fill="#cc0000"/>
+          <path d="M 152 246 A 10 10 0 0 1 168 246" stroke="#cc0000" stroke-width="1" fill="none"/>
+          <text x="190" y="243" fill="#cc0000" font-family="JetBrains Mono" font-size="6">R-axis</text>
+
+          <!-- Coordinate axes at tool tip -->
+          <g transform="translate(160,240)">
+            <line x1="0" y1="0" x2="22" y2="0" stroke="#ff6b6b" stroke-width="1.2"/>
+            <text x="26" y="3" fill="#ff6b6b" font-family="JetBrains Mono" font-size="7">X</text>
+            <line x1="0" y1="0" x2="-15" y2="-8" stroke="#4ecdc4" stroke-width="1.2"/>
+            <text x="-22" y="-10" fill="#4ecdc4" font-family="JetBrains Mono" font-size="7">Y</text>
+            <line x1="0" y1="0" x2="0" y2="22" stroke="#ffd93d" stroke-width="1.2"/>
+            <text x="3" y="32" fill="#ffd93d" font-family="JetBrains Mono" font-size="7">Z</text>
+          </g>
+
+          <!-- Workspace + spiral projection -->
+          <g transform="translate(160,310)">
+            <ellipse cx="0" cy="0" rx="60" ry="14" fill="none" stroke="#2a2f38" stroke-width="1" stroke-dasharray="2,2"/>
+            <!-- Archimedean spiral r = R*theta -->
+            <path d="M 0,0
+                     L 1.5,-0.3
+                     L 3.2,0.1
+                     L 4.5,1.5
+                     L 4.2,3.4
+                     L 2.3,5.0
+                     L -0.5,5.4
+                     L -3.2,4.4
+                     L -5.1,1.8
+                     L -4.9,-1.8
+                     L -2.6,-4.6
+                     L 1.0,-5.8
+                     L 5.2,-4.6
+                     L 8.2,-1.5
+                     L 8.6,3.2
+                     L 5.6,7.2
+                     L 0.3,8.4
+                     L -5.6,6.6
+                     L -9.5,1.6
+                     L -9.4,-4.4
+                     L -5.0,-9.1
+                     L 1.5,-10.2
+                     L 8.5,-7.4
+                     L 12.6,-1.5
+                     L 11.7,5.7
+                     L 6.3,10.7
+                     L -1.4,11.6
+                     L -8.9,8.3
+                     L -13.6,1.2
+                     L -12.9,-7.0
+                     L -7.0,-12.6
+                     L 1.5,-13.8" stroke="#9b6cff" stroke-width="1.6" fill="none"/>
+            <text x="0" y="-26" fill="#9b6cff" font-family="JetBrains Mono" font-size="7" text-anchor="middle">SPIRAL r = R&theta;</text>
+            <text x="0" y="-18" fill="#555964" font-family="JetBrains Mono" font-size="6" text-anchor="middle">8&pi; rad &middot; 101 pts</text>
+          </g>
+
+          <!-- Drive labels at top -->
+          <text x="60" y="78" fill="#555964" font-family="JetBrains Mono" font-size="5" text-anchor="middle">H008</text>
+          <text x="260" y="78" fill="#555964" font-family="JetBrains Mono" font-size="5" text-anchor="middle">H008</text>
+          <text x="160" y="58" fill="#555964" font-family="JetBrains Mono" font-size="5" text-anchor="middle">H008</text>
+
+          <!-- Caption block -->
+          <g transform="translate(15, 360)">
+            <line x1="0" y1="0" x2="14" y2="0" stroke="#9b6cff" stroke-width="2"/>
+            <text x="20" y="3" fill="#8a8e98" font-family="JetBrains Mono" font-size="7">CIP_DRIVE axis</text>
+            <line x1="160" y1="0" x2="174" y2="0" stroke="#cc0000" stroke-width="1.5"/>
+            <text x="180" y="3" fill="#8a8e98" font-family="JetBrains Mono" font-size="7">Rotary tool</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCOPE / OVERVIEW -->
+<section id="overview">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>01</span>Project Scope</div>
+      <h2 class="section-title">From single-axis to a <em>full</em> coordinated platform.</h2>
+    </div>
+    <div class="prose">
+      <p>
+        This project extends the earlier single-axis simple-motion work into a full multi-axis
+        coordinated platform: a <strong>Delta-style parallel robot</strong> with three joint
+        axes, a rotary tool axis, and three virtual Cartesian axes tied to a CIP coordinate
+        system. A 10-step procedural sequence drives <code>MCLM</code> coordinated linear moves
+        through the Cartesian workspace, then calls a cam-profile calculator and launches two
+        <code>MATC</code> time-driven cam moves to trace a parametric 8&pi;-radian spiral in X/Y
+        while Z steps. Each axis also owns its own Equipment Module with a PackML-aware CM00
+        procedure for jog/stop/error handling.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>02</span>System Architecture</div>
+      <h2 class="section-title">One unit, seven EMs, <em>two</em> coordinate systems.</h2>
+    </div>
+
+    <div class="prose">
+      <p>
+        The DeltaBot controller is a <strong>1756-L81E ControlLogix</strong> running Studio 5000
+        Logix Designer. The project is structured under ISA-88 / PackML conventions: a single unit
+        (<code>UN01_ExampleMachine</code>) holds the procedural logic, while each physical axis is
+        wrapped in its own Equipment Module. All motion runs over <strong>EtherNet/IP CIP Motion
+        with Time Sync</strong> — every servo drive clocked from the same grand-master on the
+        backplane, so coordinated linear moves execute on a common time base.
+      </p>
+    </div>
+
+    <div class="arch-grid">
+      <div class="arch-card span-4">
+        <div class="arch-card-label">Layer 01</div>
+        <h3 class="arch-card-title">Unit Procedure</h3>
+        <p><code>UN01_ExampleMachine</code> with <code>UP00_Procedure</code> (master 10-step ladder), <code>UP01_PackML</code>, <code>UP02_Transform</code>, <code>UP03_SpiralCalcPts</code>, and <code>UP10_SpiralCamCalcPoints</code>.</p>
+      </div>
+      <div class="arch-card span-4">
+        <div class="arch-card-label">Layer 02</div>
+        <h3 class="arch-card-title">Equipment Modules</h3>
+        <p>Seven EMs (<code>EM01_Axis_J1</code> &hellip; <code>EM07_Axis_Z</code>), each holding a PackML-aware <code>CM00_Procedure</code> that maps unit step flags into per-axis motion instructions.</p>
+      </div>
+      <div class="arch-card span-4">
+        <div class="arch-card-label">Layer 03</div>
+        <h3 class="arch-card-title">Coordinate Systems</h3>
+        <p><code>Cart_Coor</code> for tool-tip Cartesian commands; <code>Delta_Coor</code> for the joint frame. <code>UP02_Transform</code> handles delta forward/inverse kinematics between them.</p>
+      </div>
+    </div>
+
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/project_tree.png" alt="Studio 5000 project tree">
+        <div class="fig-label">Fig. 01 / Project Tree</div>
+        <div class="fig-caption">Studio 5000 Controller Organizer showing <code>UN01_ExampleMachine</code> with its unit procedures and the seven Equipment Modules <code>EM01_Axis_J1</code> &hellip; <code>EM07_Axis_Z</code>.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/controller_axes.png" alt="Axis catalog and servo drives">
+        <div class="fig-label">Fig. 02 / Axis Catalog</div>
+        <div class="fig-caption">Three physical <code>Axis_0N_Jn_Servo</code> CIP_DRIVE tags, the rotary <code>Axis_04_R_Servo</code>, and three <code>AXIS_VIRTUAL</code> tags <code>Axis_05_X / 06_Y / 07_Z</code> for the coordinate frame.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HARDWARE -->
+<section id="hardware">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>03</span>Hardware &amp; Axes</div>
+      <h2 class="section-title">Kinetix 5700 servos, <em>virtual</em> Cartesians.</h2>
+    </div>
+
+    <div class="prose">
+      <p>
+        The robot exposes <strong>seven motion axes</strong> and <strong>two coordinate
+        systems</strong>. The three delta upper arms and the rotary tool run on Kinetix 5700 drives
+        over the device-level ring; the X / Y / Z Cartesian axes are AXIS_VIRTUAL tags that live
+        only inside <code>Cart_Coor</code>. The coupling between joint space and Cartesian space is
+        provided by <code>UP02_Transform</code>, so <code>MCLM</code> moves are written in
+        <em>tool-tip</em> coordinates and the transform resolves joint angles in real time.
+      </p>
+    </div>
+
+    <div class="axis-table">
+      <div class="axis-row header">
+        <div class="axis-cell">TAG</div>
+        <div class="axis-cell">TYPE</div>
+        <div class="axis-cell">PURPOSE</div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">1756-L81E</div>
+        <div class="axis-cell axis-type">Controller</div>
+        <div class="axis-cell axis-desc">ControlLogix 5580 &mdash; hosts unit procedure, transform, and all EMs</div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">1756-EN2TR</div>
+        <div class="axis-cell axis-type">Ethernet Bridge</div>
+        <div class="axis-cell axis-desc">Device-level ring to the Kinetix 5700 drive group</div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">Kinetix 2198-H015-ERS</div>
+        <div class="axis-cell axis-type">R-axis Drive</div>
+        <div class="axis-cell axis-desc">Larger frame for the rotary tool axis (<code>Axis_04_R</code>)</div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">Kinetix 2198-H008-ERS &times;3</div>
+        <div class="axis-cell axis-type">J-axis Drives</div>
+        <div class="axis-cell axis-desc">Three joint axes of the delta &mdash; <code>Axis_01_J1</code>, <code>Axis_02_J2</code>, <code>Axis_03_J3</code></div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">Axis_05_X / 06_Y / 07_Z</div>
+        <div class="axis-cell axis-type">AXIS_VIRTUAL</div>
+        <div class="axis-cell axis-desc">Members of <code>Cart_Coor</code> &mdash; targets for every <code>MCLM</code> and <code>MATC</code></div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">Cart_Coor</div>
+        <div class="axis-cell axis-type">COORDINATE_SYSTEM</div>
+        <div class="axis-cell axis-desc">Cartesian target frame used by all <code>MCLM</code> moves</div>
+      </div>
+      <div class="axis-row">
+        <div class="axis-cell axis-tag">Delta_Coor</div>
+        <div class="axis-cell axis-type">COORDINATE_SYSTEM</div>
+        <div class="axis-cell axis-desc">Joint/mechanism frame &mdash; where J1/J2/J3 live</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- UP00 -->
+<section id="unit">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>04</span>Unit Procedure UP00</div>
+      <h2 class="section-title">Master choreography, <em>live-computed</em> accel.</h2>
+    </div>
+
+    <div class="prose">
+      <p>
+        <code>UP00_Procedure</code> is a 14-rung ladder that sequences ten steps using a set-reset
+        state pattern. Step transitions key off either the <code>.PC</code> (process-complete) bit
+        of the preceding <code>MCLM</code>, the <code>.DN</code> of a wait timer, or the
+        <code>.DN</code>s of the two <code>MCCP</code> cam-profile calculations. The
+        <strong>same motion-math block</strong> is repeated at every linear-move step &mdash; once
+        per step, live at every scan &mdash; so accel/decel are recomputed from the current robot
+        position rather than assumed.
+      </p>
+    </div>
+
+    <div class="code-block">
+<span class="com">// Per-axis distance from current position to next target</span>
+<span class="ax">distance</span>[<span class="num">0</span>] := <span class="kw">ABS</span>(<span class="ax">Cart_Coor</span>.ActualPosition[<span class="num">5</span>] - <span class="ax">moveN</span>[<span class="num">0</span>]);   <span class="com">// X error</span>
+<span class="ax">distance</span>[<span class="num">1</span>] := <span class="kw">ABS</span>(<span class="ax">Cart_Coor</span>.ActualPosition[<span class="num">6</span>] - <span class="ax">moveN</span>[<span class="num">1</span>]);   <span class="com">// Y error</span>
+<span class="ax">distance</span>[<span class="num">2</span>] := <span class="kw">ABS</span>(<span class="ax">Cart_Coor</span>.ActualPosition[<span class="num">7</span>] - <span class="ax">moveN</span>[<span class="num">2</span>]);   <span class="com">// Z error</span>
+
+<span class="com">// Size the ramp so we reach MoveSpeed over half of the mean per-axis distance</span>
+<span class="ax">accel</span>       := (<span class="ax">MoveSpeed</span> ** <span class="num">2</span>)
+             / (<span class="num">0.5</span> * (<span class="ax">distance</span>[<span class="num">0</span>] + <span class="ax">distance</span>[<span class="num">1</span>] + <span class="ax">distance</span>[<span class="num">2</span>]) / <span class="num">3</span>);
+    </div>
+
+    <p style="color: var(--ink-dim); font-size: 13px; max-width: 820px; margin-top: 16px;">
+      A first-principles way of sizing the ramp: a short step uses a gentle ramp and a long step
+      uses a stiff one. All moves then execute with the following <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 5px;">MCLM</code> parameters:
+    </p>
+
+    <div class="motion-spec">
+      <div class="spec-row"><div class="k">Coordinate System</div><div class="v"><code>Cart_Coor</code></div></div>
+      <div class="spec-row"><div class="k">Speed</div><div class="v"><code>MoveSpeed</code> = 20.0 units/sec</div></div>
+      <div class="spec-row"><div class="k">Accel / Decel</div><div class="v"><code>accel</code> (computed) &mdash; typically &asymp; 6.0 units/sec&sup2;</div></div>
+      <div class="spec-row"><div class="k">Profile</div><div class="v">Trapezoidal</div></div>
+      <div class="spec-row"><div class="k">Accel / Decel Jerk</div><div class="v">100 % of Time (later tuned to 50 % and 10 % &mdash; see &sect;7)</div></div>
+      <div class="spec-row"><div class="k">Termination Type</div><div class="v">1 &mdash; Actual Tolerance (next step blocks on <code>.PC</code>)</div></div>
+      <div class="spec-row"><div class="k">Merge</div><div class="v">Disabled</div></div>
+    </div>
+
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/up00_step1_mclm.png" alt="UP00 Step 1 MCLM">
+        <div class="fig-label">Fig. 03 / Step 1 &mdash; MCLM1</div>
+        <div class="fig-caption">Three <code>CPT</code> blocks compute per-axis distances, a fourth produces <code>accel</code>, and the <code>MCLM</code> executes the move to <code>move1 = (50, 50, &minus;130)</code> in <code>Cart_Coor</code>.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/up00_step3_mclm.png" alt="UP00 Step 3 MCLM">
+        <div class="fig-label">Fig. 04 / Step 3 &mdash; MCLM3</div>
+        <div class="fig-caption">Same pattern; target <code>move3 = (0, 0, &minus;10)</code>. The PackML-style <code>UP_Exec_Step_03 &rArr; UP_Exec_Step_04</code> chain is visible at the bottom of the rung.</div>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--serif); font-size: 22px; color: var(--ink); margin-top: 48px; margin-bottom: 16px; font-weight: 400;">Step targets &mdash; the 10-step choreography</h3>
+
+    <div class="step-table">
+      <div class="step-row header">
+        <div class="step-cell">#</div>
+        <div class="step-cell">ACTION</div>
+        <div class="step-cell">X</div>
+        <div class="step-cell">Y</div>
+        <div class="step-cell">Z</div>
+        <div class="step-cell">TERMINATOR</div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">01</div>
+        <div class="step-cell step-act"><code>MCLM1</code> &mdash; coordinated linear move</div>
+        <div class="step-cell coord x">50</div>
+        <div class="step-cell coord y">50</div>
+        <div class="step-cell coord z">&minus;130</div>
+        <div class="step-cell term"><code>mclm1.PC</code></div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">02</div>
+        <div class="step-cell step-act">Wait 1 s</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell term"><code>waittmr.DN</code></div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">03</div>
+        <div class="step-cell step-act"><code>MCLM3</code></div>
+        <div class="step-cell coord x">0</div>
+        <div class="step-cell coord y">0</div>
+        <div class="step-cell coord z">&minus;10</div>
+        <div class="step-cell term"><code>mclm3.PC</code></div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">04</div>
+        <div class="step-cell step-act"><code>MCLM4</code></div>
+        <div class="step-cell coord x">0</div>
+        <div class="step-cell coord y">0</div>
+        <div class="step-cell coord z">70</div>
+        <div class="step-cell term"><code>mclm4.PC</code></div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">05</div>
+        <div class="step-cell step-act"><code>MCLM5</code></div>
+        <div class="step-cell coord x">&minus;50</div>
+        <div class="step-cell coord y">&minus;50</div>
+        <div class="step-cell coord z">0</div>
+        <div class="step-cell term"><code>mclm5.PC</code></div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">06</div>
+        <div class="step-cell step-act"><code>MCLM6</code></div>
+        <div class="step-cell coord x">0</div>
+        <div class="step-cell coord y">0</div>
+        <div class="step-cell coord z">&minus;70</div>
+        <div class="step-cell term"><code>mclm6.PC</code></div>
+      </div>
+      <div class="step-row spiral">
+        <div class="step-cell step-n">07</div>
+        <div class="step-cell step-act">JSR UP10 / UP03 &mdash; build &amp; launch spiral cams</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell term"><code>MCCP_1.DN &amp; MCCP_2.DN</code></div>
+      </div>
+      <div class="step-row spiral">
+        <div class="step-cell step-n">08</div>
+        <div class="step-cell step-act">Spiral plays on X/Y, R-axis jogs</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell term">all axis step-done bits</div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">09</div>
+        <div class="step-cell step-act"><code>MCLM9</code></div>
+        <div class="step-cell coord x">0</div>
+        <div class="step-cell coord y">0</div>
+        <div class="step-cell coord z">40</div>
+        <div class="step-cell term"><code>mclm9.PC</code></div>
+      </div>
+      <div class="step-row">
+        <div class="step-cell step-n">10</div>
+        <div class="step-cell step-act"><code>MCLM10</code> &rarr; latch <code>UP_Idle</code></div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell coord">&mdash;</div>
+        <div class="step-cell term"><code>mclm10.PC</code></div>
+      </div>
+    </div>
+
+    <div class="figs single" style="margin-top: 32px;">
+      <div class="fig">
+        <img src="delta_images/up00_step10_mclm.png" alt="UP00 Step 10 final MCLM">
+        <div class="fig-label">Fig. 05 / Step 10 &mdash; Final MCLM &amp; UP_Idle Latch</div>
+        <div class="fig-caption">The closing <code>MCLM</code> (target <code>move10</code>). On <code>.PC</code> it unlatches both <code>UP_Exec_Step_11</code> and <code>UP_Execute</code> and latches <code>UP_Idle</code>, handing the PackML state machine back to Idle.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SPIRAL -->
+<section id="spiral">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>05</span>Spiral Cam Profile</div>
+      <h2 class="section-title">Build the geometry <em>once</em>, play it back in time.</h2>
+    </div>
+
+    <div class="prose">
+      <p>
+        Steps 7&ndash;8 draw a parametric 2-revolution spiral in the X/Y plane. Rather than stream
+        a coordinated path, the program builds two <strong>cam profiles</strong> (one for X, one
+        for Y) as a function of a common time-base master, then runs <code>MATC</code> on each
+        virtual axis to play the cam back in time-driven mode. A classic trick when the workspace
+        path is periodic or analytic: the PLC computes the geometry once, and the motion planner
+        interpolates the rest.
+      </p>
+    </div>
+
+    <h3 style="font-family: var(--serif); font-size: 22px; color: var(--ink); margin-top: 32px; margin-bottom: 8px; font-weight: 400;">UP10 &mdash; build the cam points (Structured Text)</h3>
+    <p style="color: var(--ink-dim); font-size: 13.5px; max-width: 820px;">A 14-line ST routine fills the <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 5px;">Spiral_X_Cam</code> and <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 5px;">Spiral_Y_Cam</code> CAM arrays with 101 points over 8&pi; radians. Radius <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 5px;">R = 2.0</code> grows linearly with &theta;, giving the classic Archimedean spiral <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 5px;">r = R&theta;</code>.</p>
+
+    <div class="code-block">
+<span class="ax">NumOfPoints</span> := <span class="num">101</span>;
+<span class="ax">R</span>           := <span class="num">2.0</span>;
+
+<span class="kw">FOR</span> <span class="ax">Index</span> := <span class="num">0</span> <span class="kw">TO</span> <span class="ax">NumOfPoints</span>-<span class="num">1</span> <span class="kw">DO</span>
+    <span class="ax">Theta</span> := <span class="ax">Index</span> * (<span class="num">8</span> * <span class="ax">pi</span>) / <span class="ax">NumOfPoints</span>;
+
+    <span class="ax">Spiral_X_Cam</span>[<span class="ax">Index</span>].Master      := <span class="ax">Index</span>;
+    <span class="ax">Spiral_X_Cam</span>[<span class="ax">Index</span>].Slave       := <span class="ax">R</span> * <span class="ax">Theta</span> * <span class="kw">COS</span>(<span class="ax">Theta</span>);
+    <span class="ax">Spiral_X_Cam</span>[<span class="ax">Index</span>].SegmentType := <span class="num">0</span>;                 <span class="com">// linear</span>
+
+    <span class="ax">Spiral_Y_Cam</span>[<span class="ax">Index</span>].Master      := <span class="ax">Index</span>;
+    <span class="ax">Spiral_Y_Cam</span>[<span class="ax">Index</span>].Slave       := <span class="ax">R</span> * <span class="ax">Theta</span> * <span class="kw">SIN</span>(<span class="ax">Theta</span>);
+    <span class="ax">Spiral_Y_Cam</span>[<span class="ax">Index</span>].SegmentType := <span class="num">0</span>;
+<span class="kw">END_FOR</span>;
+    </div>
+
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/up10_spiralcam_st.png" alt="UP10 spiral point generator">
+        <div class="fig-label">Fig. 06 / UP10 &mdash; Spiral Point Generator</div>
+        <div class="fig-caption">Structured-text routine populating the two CAM arrays. 101 points over 8&pi; radians is two full Archimedean turns.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/up03_spiralcalcpts.png" alt="UP03 two MCCP blocks">
+        <div class="fig-label">Fig. 07 / UP03 &mdash; MCCP Cam Calc</div>
+        <div class="fig-caption">Two parallel <code>MCCP</code> blocks convert the point arrays into executable cam profiles (<code>Spiral_XCam_Pro</code>, <code>Spiral_YCam_Pro</code>). The rung latches <code>UP_Exec_StepDn_07</code> once both <code>.DN</code> bits are high.</div>
+      </div>
+    </div>
+
+    <p class="prose" style="margin-top: 32px;">
+      Once the profiles exist, each Cartesian virtual axis calls <code>MATC</code> (Motion Axis
+      Time Cam) to play its half of the spiral. Because <code>MATC</code> is time-driven, the
+      spiral traces itself autonomously on each axis &mdash; X and Y share nothing but the common
+      time base, yet produce a smooth 2D path because both cams were built from the same
+      <code>Theta</code> sweep. Meanwhile <code>Axis_04_R</code> runs a short jog sequence in its
+      own EM so the tool spins while the spiral draws.
+    </p>
+
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/em05_x_cm00_matc.png" alt="EM05 Axis X MATC">
+        <div class="fig-label">Fig. 08 / EM05_Axis_X &mdash; MATC</div>
+        <div class="fig-caption"><code>MATC</code> binds <code>Axis_05_X</code> to <code>Spiral_XCam_Pro</code>. <em>Distance Scaling = 1.0</em>, <em>Time Scaling = 0.15</em> (plays the cam in 15 % of master time &mdash; &asymp; 7&times; faster than 1 s/point), <em>Execution Mode = Once</em>, <em>Time-Driven Mode</em>.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/em06_y_cm00_matc.png" alt="EM06 Axis Y MATC">
+        <div class="fig-label">Fig. 09 / EM06_Axis_Y &mdash; MATC</div>
+        <div class="fig-caption">Identical settings but bound to <code>Axis_06_Y</code> and <code>Spiral_YCam_Pro</code>. The two EMs fire in parallel at <code>UP_Exec_Step_08</code>.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EM -->
+<section id="em">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>06</span>Equipment Modules</div>
+      <h2 class="section-title">The <em>same</em> CM00 pattern, per axis.</h2>
+    </div>
+
+    <div class="prose">
+      <p>
+        Each axis EM owns an identical 8&ndash;9-rung CM00 pattern that maps unit step flags into
+        motion instructions on that axis: a <code>NOP</code> header; a first-scan <code>COP</code>
+        of <code>MI_Init</code> into the working motion-instruction tag; a step-bit clear on first
+        scan, <code>UP_Resetting</code>, or <code>UP_Idle</code>; a <code>No_Steps_Active</code>
+        helper; a <code>Step_1</code> seed on <code>UP_Execute</code>; the axis's actual motion
+        instructions; and an <code>AFI</code>-guarded error latch into
+        <code>EM_ProcedureError[EM_Number]</code>. The differences live in the middle &mdash; the
+        R-axis jogs, the X / Y axes run MATC, the J-axes get transform output.
+      </p>
+    </div>
+
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/em03_r_cm00_maj.png" alt="EM03 Axis R MAJ jog">
+        <div class="fig-label">Fig. 10 / EM03_Axis_R &mdash; MAJ Jog</div>
+        <div class="fig-caption">Rung 5 &mdash; an <code>MAJ</code> starts the tool spinning at 0.1 units/sec with parameterized accel/decel of 100 units/sec&sup2;, S-Curve profile, Jerk = 100 % of Time, during <code>UP_Exec_Step_08</code> (while the spiral is playing).</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/em03_r_cm00_jog_mas.png" alt="EM03 Axis R MAS stop">
+        <div class="fig-label">Fig. 11 / EM03_Axis_R &mdash; MAS Stop</div>
+        <div class="fig-caption">Rung 6 &mdash; an <code>MAS</code> kills the jog at <code>UP_Exec_Step_09</code>, changing decel but preserving the decel-jerk so the tool stops smoothly before the final return move.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRENDS -->
+<section id="trends">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>07</span>Tuning &amp; Trend Analysis</div>
+      <h2 class="section-title">Jerk is the <em>production</em> knob.</h2>
+    </div>
+
+    <div class="prose">
+      <p>
+        Three trend experiments visualized how <strong>accel/decel jerk</strong> shapes the
+        Cartesian path during the 6-step linear sequence (before the spiral).
+        <code>Cart_Coor.ActualPosition[0..2]</code> (X, Y, Z) plotted against time on the same
+        chart; a companion chart plots X vs. Z to show the projected path. Cycle time trades
+        almost linearly against mechanical friendliness on the delta parallelograms.
+      </p>
+    </div>
+
+    <h3 style="font-family: var(--serif); font-size: 20px; color: var(--ink); margin-top: 40px; margin-bottom: 4px; font-weight: 400;">Jerk = 100 % of time &mdash; trapezoidal, fastest cycle</h3>
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/trend_jerk100_pos.png" alt="Jerk 100% position">
+        <div class="fig-label">Fig. 12 / X/Y/Z vs Time @ 100 % Jerk</div>
+        <div class="fig-caption">Total cycle &asymp; 45 s. The ramps are sharp-elbowed &mdash; jerk is effectively infinite at the transition, mechanically harshest but temporally fastest.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/trend_jerk100_xz.png" alt="Jerk 100% X vs Z">
+        <div class="fig-label">Fig. 13 / X vs Z Projection @ 100 % Jerk</div>
+        <div class="fig-caption">Motion dominated by straight legs (pure trapezoidal), giving a crisp polygonal path through the workspace.</div>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--serif); font-size: 20px; color: var(--ink); margin-top: 48px; margin-bottom: 4px; font-weight: 400;">Jerk = 50 % of time &mdash; half-S, half-trap</h3>
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/trend_jerk50_pos.png" alt="Jerk 50% position">
+        <div class="fig-label">Fig. 14 / X/Y/Z vs Time @ 50 % Jerk</div>
+        <div class="fig-caption">The shoulders of each ramp round slightly; cycle lengthens a few seconds but peak jerk is halved.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/trend_jerk50_xz.png" alt="Jerk 50% X vs Z">
+        <div class="fig-label">Fig. 15 / X vs Z Projection @ 50 % Jerk</div>
+        <div class="fig-caption">Corners stay tight because termination type is still <em>actual tolerance</em> &mdash; the motion planner completes each step before the next launches.</div>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--serif); font-size: 20px; color: var(--ink); margin-top: 48px; margin-bottom: 4px; font-weight: 400;">Jerk = 10 % of time &mdash; full S-curve</h3>
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/trend_jerk10_pos.png" alt="Jerk 10% position">
+        <div class="fig-label">Fig. 16 / X/Y/Z vs Time @ 10 % Jerk</div>
+        <div class="fig-caption">Ramps deeply rounded (essentially an S-curve). Cycle time grows noticeably, but mechanical stress on the delta parallelograms drops dramatically.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/trend_jerk10_xz.png" alt="Jerk 10% X vs Z">
+        <div class="fig-label">Fig. 17 / X vs Z Projection @ 10 % Jerk</div>
+        <div class="fig-caption">Projected path still linear segment-by-segment because each step terminates individually, but intra-segment motion is gentler.</div>
+      </div>
+    </div>
+
+    <h3 style="font-family: var(--serif); font-size: 20px; color: var(--ink); margin-top: 48px; margin-bottom: 4px; font-weight: 400;">Week 3 &mdash; with the spiral playing</h3>
+    <div class="figs">
+      <div class="fig">
+        <img src="delta_images/trend_week3_pos.png" alt="Week 3 trend including spiral">
+        <div class="fig-label">Fig. 18 / Full Run with Spiral</div>
+        <div class="fig-caption">Linear steps 1&ndash;6, then the time-driven <code>MATC</code> on X/Y (the two ramped-sinusoid humps around the midpoint), then linear steps 9&ndash;10 to return home.</div>
+      </div>
+      <div class="fig">
+        <img src="delta_images/trend_week3_xy.png" alt="Week 3 X vs Y">
+        <div class="fig-label">Fig. 19 / X vs Y Projection</div>
+        <div class="fig-caption">Diagonal trace corresponds to the (50, 50) &rarr; (&minus;50, &minus;50) diagonal traversed across steps 1, 3, 4, 5, 6.</div>
+      </div>
+    </div>
+
+    <div class="outcome" style="margin-top: 48px;">
+      <p style="font-family: var(--mono); font-size: 14px; color: var(--ink-dim);">
+        <strong style="color: var(--delta); font-family: var(--serif); font-size: 16px; font-style: italic;">Tuning takeaway.</strong>
+        Jerk percentage trades cycle time for mechanical friendliness on an almost linear basis
+        for this workload &mdash; 10 % jerk is &asymp; 1.5&times; the total time of 100 % jerk but
+        is what you would run in production on a delta, because parallel kinematics amplifies
+        shock at the tool through all three J-axes simultaneously.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- TAKEAWAYS / SKILLS -->
+<section id="skills">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>08</span>Engineering Takeaways</div>
+      <h2 class="section-title">What the build <em>actually</em> taught.</h2>
+    </div>
+
+    <div class="skills-grid">
+      <div class="skill">
+        <div class="skill-name">Coordinate Systems</div>
+        <ul>
+          <li>Programming in <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 4px;font-size:11px;">Cart_Coor</code> over per-axis moves</li>
+          <li>UP02_Transform doing inverse kinematics under the hood</li>
+          <li>Pure Cartesian geometry in UP00 &mdash; review-friendly</li>
+          <li>Joint frame isolated to one routine</li>
+        </ul>
+      </div>
+      <div class="skill">
+        <div class="skill-name">Cam Profiles</div>
+        <ul>
+          <li>Build geometry once (UP10), execute many (MATC)</li>
+          <li>MCCP arrays &rarr; CAM_PROFILE objects</li>
+          <li>Time Scaling = 0.15 for 7&times; playback</li>
+          <li>Cheaper per scan than streamed paths</li>
+        </ul>
+      </div>
+      <div class="skill">
+        <div class="skill-name">Live-Computed Accel</div>
+        <ul>
+          <li><code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 4px;font-size:11px;">accel = MoveSpeed&sup2; / (&frac12; mean-distance)</code></li>
+          <li>Position-robust across homing offsets</li>
+          <li>Short steps get gentle ramps automatically</li>
+          <li>Long steps stiffen the ramp to hit speed</li>
+        </ul>
+      </div>
+      <div class="skill">
+        <div class="skill-name">PackML in Every Module</div>
+        <ul>
+          <li><code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 4px;font-size:11px;">UP_Idle</code> / <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 4px;font-size:11px;">UP_Execute</code> / <code style="color:var(--delta);background:rgba(155,108,255,0.08);padding:1px 4px;font-size:11px;">UP_Resetting</code> in every CM00</li>
+          <li>Each axis independently agrees with the unit</li>
+          <li>R-axis jog + X/Y cams run in parallel cleanly</li>
+          <li>No cross-contamination between modules</li>
+        </ul>
+      </div>
+      <div class="skill">
+        <div class="skill-name">CIP Motion Practice</div>
+        <ul>
+          <li>EtherNet/IP with Time Sync grand-master</li>
+          <li>Kinetix 5700 H008 / H015 drive sizing</li>
+          <li>Device-level ring topology</li>
+          <li>Common time base for coordinated moves</li>
+        </ul>
+      </div>
+      <div class="skill">
+        <div class="skill-name">Jerk Tuning</div>
+        <ul>
+          <li>Jerk is the first-order lever on mechanical stress</li>
+          <li>More useful to vary than speed itself</li>
+          <li>100 / 50 / 10 % experiments documented</li>
+          <li>Production knob, not a debug parameter</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OUTCOME -->
+<section id="outcome" style="border-bottom: none;">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-num"><span>09</span>Outcome</div>
+      <h2 class="section-title">Ten steps, two cams, <em>seven</em> coordinated servos.</h2>
+    </div>
+
+    <div class="outcome">
+      <p>
+        The final deliverable is a working DeltaBot motion application: ten coordinated linear
+        moves through Cartesian workspace, a parametric 8&pi;-radian Archimedean spiral played
+        autonomously on two virtual axes via time-driven cams, a rotary tool that jogs in parallel
+        for the duration of the spiral, and a clean PackML hand-off back to Idle at the end of the
+        cycle. <em>Beyond the working demo</em>, the build was a concrete walkthrough of how a
+        modern multi-axis motion project comes together &mdash; CIP Motion time sync, coordinate
+        systems with inverse kinematics, cam-profile geometry computed once and replayed in time,
+        and a PackML-shaped supervisory layer that lets independent axes execute coordinated
+        choreography without cross-contamination.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div>DeltaBot &nbsp;//&nbsp; EE 5340 Capstone</div>
+    <div>1756-L81E &nbsp;&middot;&nbsp; Kinetix 5700 &nbsp;&middot;&nbsp; CIP Motion &nbsp;&middot;&nbsp; PackML</div>
+  </div>
+</footer>
+
+</body>
+</html>
